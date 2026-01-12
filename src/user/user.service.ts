@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Prisma } from 'src/generated/prisma/client';
+import { BadRequestException } from '@nestjs/common';
+
 import * as bcrypt from 'bcrypt';
 
 
@@ -10,15 +13,28 @@ export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto) {
-  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+  try {
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-  return this.prisma.user.create({
-    data: {
-      ...createUserDto,
-      password: hashedPassword, 
-    },
-  });
+    return await this.prisma.user.create({
+      data: {
+        ...createUserDto,
+        password: hashedPassword,
+      },
+    });
+  } catch (error) {
+   
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new BadRequestException('Cet email est déjà utilisé');
+    }
+    throw error; 
+  }
 }
+
+  
 
   async findAll() {
     return this.prisma.user.findMany();
