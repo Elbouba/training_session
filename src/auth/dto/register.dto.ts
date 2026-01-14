@@ -1,18 +1,31 @@
-import {  IsNotEmpty,  MinLength, MaxLength, IsEmail } from 'class-validator';
+import {
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsEmail,
+  IsOptional,
+  IsString
+} from 'class-validator';
 
-export class  RegisterDto {
+export class RegisterDto {
 
-    @IsEmail()
-    email: string;
+  @IsEmail()
+  email: string;
 
-    @IsNotEmpty()
-    nom: string;
+  @IsNotEmpty()
+  @IsString()
+  firstName: string; // firstName
 
-    @IsNotEmpty()
-    prenom: string;
+  @IsNotEmpty()
+  @IsString()
+  lastName: string; // lastName
 
-    @IsNotEmpty()
-    @MinLength(4) 
-    @MaxLength(6)
-    password: string;
+  @IsOptional()
+  @IsString()
+  phone: string;
+
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(6)
+  password: string;
 }

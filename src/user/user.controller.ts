@@ -8,27 +8,32 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto) {
+    const result = await this.userService.create(createUserDto);
+    return result; // { message: 'Utilisateur créé avec succès', data: user }
   }
 
   @Get()
-  findAll() {
-    return this.userService.findAll();
+  async findAll() {
+    const result = await this.userService.findAll();
+    return result; // { message: 'Liste des utilisateurs', data: [...] }
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(Number(id));
+  async findOne(@Param('id') id: string) {
+    const result = await this.userService.findOne(id);
+    return result; // { message: 'Utilisateur trouvé', data: user }
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(Number(id), updateUserDto);
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const result = await this.userService.update(id, updateUserDto);
+    return result; // { message: 'Utilisateur mis à jour avec succès', data: updatedUser }
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(Number(id));
+  async remove(@Param('id') id: string) {
+    const result = await this.userService.remove(id);
+    return result; // { message: 'Utilisateur supprimé avec succès' }
   }
 }

@@ -4,13 +4,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
+import { first } from 'rxjs';
 
 @Injectable()
 export class AuthService {
     constructor (private readonly prisma: PrismaService, private readonly jwtService: JwtService){}
    
     async register(registerDto: RegisterDto){
-      const {email, nom, prenom, password} = registerDto;
+      const {email, firstName, lastName, password, phone} = registerDto;
 
       const existingUser = await this.prisma.user.findUnique({ where: {email}});
       if (existingUser){
@@ -22,8 +23,9 @@ export class AuthService {
       const user = await this.prisma.user.create({
         data:{
           email,
-          nom,
-          prenom,
+          firstName,
+          lastName,
+          phone,
           password: hashedPassword,
         }
       });
@@ -33,8 +35,9 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          nom: user.nom,
-          prenom: user.prenom
+          firstName: user.firstName,
+         lastName: user.lastName,
+         phone:user.phone
         }
       }
     }
@@ -65,8 +68,9 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        nom: user.nom,
-        prenom: user.prenom,
+        firstName: user.firstName,
+        lastname: user.lastName,
+        phone:user.phone
       },
     };
   }

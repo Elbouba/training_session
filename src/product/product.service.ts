@@ -1,52 +1,79 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'src/generated/prisma/client';
-import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
-
 export class ProductService {
-  constructor ( private readonly prisma: PrismaService) {}
- async create(createProductDto: CreateProductDto) {
-  try {
-    return await this.prisma.product.create({
-      data: createProductDto,
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      throw new BadRequestException('Ce produit existe déjà');
-    }
-    throw error;
-  }
-}
+  constructor(private readonly prisma: PrismaService) {}
 
+  async create(createProductDto: CreateProductDto) {
+    try {
+      const product = await this.prisma.product.create({
+        data: createProductDto,
+      });
+      return {
+        message: 'Produit créé avec succès',
+        product,
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Ce produit existe déjà');
+      }
+      throw error;
+    }
+  }
 
   async findAll() {
-    return this.prisma.product.findMany();
+    const products = await this.prisma.product.findMany();
+    return {
+      message: 'Liste des produits récupérée avec succès',
+      products,
+    };
   }
 
-  findOne(id: number) {
-    return this.prisma.product.findUnique({
-      where: { id },
-    });
+  async findOne(id: number) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
+    }
+    return {
+      message: 'Produit récupéré avec succès',
+      product,
+    };
   }
 
-  update(id: number, updateProductDto: UpdateProductDto) {
-    return this.prisma.product.update({
-      where: { id },
-      data: updateProductDto,
-    });
-    
+  async update(id: number, updateProductDto: UpdateProductDto) {
+    try {
+      const product = await this.prisma.product.update({
+        where: { id },
+        data: updateProductDto,
+      });
+      return {
+        message: 'Produit mis à jour avec succès',
+        product,
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
+      }
+      throw error;
+    }
   }
 
-  remove(id: number) {
-    return this.prisma.product.delete({
-      where: {id},
-    })
+  async remove(id: number) {
+    try {
+      const product = await this.prisma.product.delete({ where: { id } });
+      return {
+        message: 'Produit supprimé avec succès',
+        product,
+      };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
+      }
+      throw error;
+    }
   }
 }
