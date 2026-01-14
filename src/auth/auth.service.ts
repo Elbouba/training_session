@@ -1,80 +1,81 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { Prisma } from 'src/generated/prisma/client';
+// CORRECTION : On importe depuis @prisma/client directement
+import { Prisma } from '@prisma/client'; 
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
-import { first } from 'rxjs';
 
 @Injectable()
 export class AuthService {
-    constructor (private readonly prisma: PrismaService, private readonly jwtService: JwtService){}
-   
-    async register(registerDto: RegisterDto){
-      const {email, firstName, lastName, password, phone} = registerDto;
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-      const existingUser = await this.prisma.user.findUnique({ where: {email}});
-      if (existingUser){
-        throw new BadRequestException('cet email est deja utilisé');
-      }
+  async register(registerDto: RegisterDto) {
+    const { email, firstName, lastName, password, phone } = registerDto;
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      const user = await this.prisma.user.create({
-        data:{
-          email,
-          firstName,
-          lastName,
-          phone,
-          password: hashedPassword,
-        }
-      });
-
-      return {
-        message: 'Utilisateur Creer avec success',
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-         lastName: user.lastName,
-         phone:user.phone
-        }
-      }
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new BadRequestException('cet email est deja utilisé');
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-  
-    async login(email:string, password:string ) {
-       const user = await this.prisma.user.findUnique({
-         where: { email },
-       });
-       if (!user) {
-        throw new UnauthorizedException('Email ou mot de passe d\'incorrect');
-       }
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        firstName,
+        lastName,
+        phone,
+        password: hashedPassword,
+        // Par défaut, le rôle est "USER" via le schéma Prisma
+      },
+    });
 
-       const isPasswordValid = await bcrypt.compare(password, user.password);
-          if(!isPasswordValid) {
-      throw new UnauthorizedException('Email ou mot de passe d\'incorrect');   }  
-
-      const payload = {
-      sub: user.id,
-      email: user.email,
-    };
-
-    const access_token = this.jwtService.sign(payload);
-      return {
-      message: 'Connexion réussie',
-      access_token,
+    return {
+      message: 'Utilisateur créé avec succès',
       user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
-        lastname: user.lastName,
-        phone:user.phone
+        lastName: user.lastName,
       },
     };
   }
 
+  async login(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
 
+    if (!user) {
+      throw new UnauthorizedException("Email ou mot de passe incorrect");
+    }
 
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException("Email ou mot de passe incorrect");
+    }
+
+    // IMPORTANT : On ajoute le rôle dans le payload pour le RolesGuard
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role, // <--- C'est ICI que la magie opère
+    };
+
+    return {
+      message: 'Connexion réussie',
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+    };
+  }
 }

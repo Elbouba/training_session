@@ -1,64 +1,31 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { PrismaClient } from 'src/generated/prisma/client';
- import * as dotenv from 'dotenv';
 
-dotenv.config();
 @Injectable()
-export class PrismaService extends PrismaClient 
-  implements OnModuleInit, OnModuleDestroy 
-{
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const connectionString = process.env.DATABASE_URL;
+    // 1. Créer la connexion Neon via le pool PG
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     
-    if (!connectionString) {
-      throw new Error('DATABASE_URL est manquant dans les variables d\'environnement');
-    }
-
-    // Créer un pool de connexions PostgreSQL
-    const pool = new Pool({ connectionString });
+    // 2. Créer l'adaptateur requis par Prisma 7
     const adapter = new PrismaPg(pool);
-
-    super({ 
-      adapter,
-      log: ['query', 'info', 'warn', 'error'],
-    });
-
-    console.log(' Configuration Prisma avec adaptateur PostgreSQL');
+    
+    // 3. Passer l'adaptateur au constructeur
+    super({ adapter });
   }
 
   async onModuleInit() {
     try {
       await this.$connect();
-      console.log(' Connecté à PostgreSQL avec succès');
+      console.log('✅ Prisma 7 : Connecté à Neon avec succès !');
     } catch (error) {
-      console.error(' Échec de connexion à PostgreSQL:', error);
-      
-      // Message d'erreur plus détaillé
-      if (error.code === 'ECONNREFUSED') {
-        console.error('\n📌 Vérifiez que:');
-        console.error('1. PostgreSQL est démarré');
-        console.error('2. L\'URL DATABASE_URL est correcte dans .env');
-        console.error('3. Le port 5432 est accessible');
-        console.error('4. L\'utilisateur/mot de passe sont corrects');
-      }
-      throw error;
+      console.error('❌ Erreur de connexion au démarrage :', error.message);
     }
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
-    console.log('🔌 Déconnecté de PostgreSQL');
-  }
-
-  // Méthode utilitaire pour vérifier la connexion
-  async checkConnection(): Promise<boolean> {
-    try {
-      await this.$queryRaw`SELECT 1`;
-      return true;
-    } catch {
-      return false;
-    }
   }
 }
