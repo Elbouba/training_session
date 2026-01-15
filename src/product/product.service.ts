@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,10 +8,14 @@ import { Prisma } from '@prisma/client'
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createProductDto: CreateProductDto) {
+ 
+  async create(createProductDto: CreateProductDto, userId: string) {
     try {
       const product = await this.prisma.product.create({
-        data: createProductDto,
+        data: {
+          ...createProductDto,
+          userId: userId, 
+        },
       });
       return {
         message: 'Produit créé avec succès',
@@ -25,26 +29,55 @@ export class ProductService {
     }
   }
 
-  async findAll() {
-    const products = await this.prisma.product.findMany();
+  // --- LECTURE GLOBALE (Isolée) ---
+  async findAll(userId: string, userRole: string) {
+    // Si Admin : voit tout + infos du créateur
+    const filter = userRole === 'ADMIN' ? { isActive: true } : { isActive: true, userId: userId };
+    
+    const products = await this.prisma.product.findMany({
+      where: filter,
+      include: {
+        createdBy: {
+          select: { firstName: true, lastName: true, role: true }
+        }
+      }
+    });
+
     return {
-      message: 'Liste des produits récupérée avec succès',
+      message: userRole === 'ADMIN' 
+        ? 'Liste globale des produits récupérée avec succès (Admin)' 
+        : 'Votre liste de produits récupérée avec succès',
       products,
     };
   }
 
-  async findOne(id: number) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) {
-      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
+  // --- LECTURE UNIQUE (Sécurisée) ---
+  async findOne(id: number, userId: string, userRole: string) {
+    const product = await this.prisma.product.findUnique({ 
+      where: { id },
+      include: { createdBy: { select: { firstName: true, lastName: true } } }
+    });
+
+    if (!product || !product.isActive) {
+      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé ou archivé`);
     }
+
+    // Vérification de propriété
+    if (userRole !== 'ADMIN' && product.userId !== userId) {
+      throw new ForbiddenException("Accès refusé : ce produit ne vous appartient pas");
+    }
+
     return {
       message: 'Produit récupéré avec succès',
       product,
     };
   }
 
-  async update(id: number, updateProductDto: UpdateProductDto) {
+  // --- MISE À JOUR (Sécurisée) ---
+  async update(id: number, updateProductDto: UpdateProductDto, userId: string, userRole: string) {
+    // On vérifie d'abord l'existence et la propriété
+    await this.findOne(id, userId, userRole);
+
     try {
       const product = await this.prisma.product.update({
         where: { id },
@@ -55,25 +88,64 @@ export class ProductService {
         product,
       };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
-      }
       throw error;
     }
   }
 
-  async remove(id: number) {
+  // --- ARCHIVAGE (Soft Delete sécurisé) ---
+  async remove(id: number, userId: string, userRole: string) {
+    // On vérifie d'abord l'existence et la propriété
+    await this.findOne(id, userId, userRole);
+
     try {
-      const product = await this.prisma.product.delete({ where: { id } });
+      const product = await this.prisma.product.update({ 
+        where: { id },
+        data: { isActive: false } 
+      });
       return {
-        message: 'Produit supprimé avec succès',
+        message: 'Produit archivé (historisé) avec succès',
         product,
       };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
-      }
       throw error;
     }
   }
+
+
+  // --- DANS PRODUCT.SERVICE.TS ---
+
+// 1. Voir uniquement les produits supprimés (ADMIN ONLY)
+async findArchived() {
+  const products = await this.prisma.product.findMany({
+    where: { isActive: false }, // On prend l'inverse
+    include: {
+      createdBy: { select: { firstName: true, lastName: true } }
+    }
+  });
+
+  return {
+    message: 'Liste des produits archivés récupérée avec succès',
+    products,
+  };
+}
+
+// 2. Restaurer un produit (ADMIN ONLY)
+async restore(id: number) {
+  try {
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: { isActive: true } // On repasse à true
+    });
+
+    return {
+      message: 'Produit restauré avec succès',
+      product,
+    };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
+    }
+    throw error;
+  }
+}
 }
