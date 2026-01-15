@@ -6,14 +6,14 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
     super({
-      // Récupère le token "Bearer" dans le header Authorization
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'ma_cle_secrete_super_securisee', 
-    });
+  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+  ignoreExpiration: false,
+  
+  secretOrKey: process.env.JWT_SECRET || 'SECRET_KEY_123', 
+});
   }
 
-  // Cette méthode est appelée automatiquement après la vérification du token
+ 
   async validate(payload: any) {
     // Si tu n'as pas de payload, le token est invalide
     if (!payload) {

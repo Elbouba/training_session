@@ -30,7 +30,7 @@ export class AuthService {
         lastName,
         phone,
         password: hashedPassword,
-        // Par défaut, le rôle est "USER" via le schéma Prisma
+       
       },
     });
 
@@ -59,11 +59,11 @@ export class AuthService {
       throw new UnauthorizedException("Email ou mot de passe incorrect");
     }
 
-    // IMPORTANT : On ajoute le rôle dans le payload pour le RolesGuard
+   
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role, // <--- C'est ICI que la magie opère
+      role: user.role, 
     };
 
     return {
