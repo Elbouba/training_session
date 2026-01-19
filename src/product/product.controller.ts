@@ -16,7 +16,6 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  
   @Get()
   findAll(@Req() req: any) {
     return this.productService.findAll(req.user.userId, req.user.role);
@@ -43,8 +42,23 @@ export class ProductController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto, @Req() req: any) {
-    return this.productService.update(+id, dto, req.user.userId, req.user.role);
+  @UseInterceptors(FileInterceptor('image', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      },
+    }),
+  }))
+  update(
+    @Param('id') id: string, 
+    @Body() dto: UpdateProductDto, 
+    @Req() req: any, 
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    const newImageUrl = file ? `/uploads/${file.filename}` : undefined;
+    return this.productService.update(+id, dto, req.user.userId, req.user.role, newImageUrl);
   }
 
   @Delete(':id')
@@ -52,7 +66,6 @@ export class ProductController {
     return this.productService.remove(+id, req.user.userId, req.user.role);
   }
 
-  // --- ROUTES RÉSERVÉES ADMIN ---
   @UseGuards(RolesGuard)
   @Get('admin/archived')
   findArchived() {
