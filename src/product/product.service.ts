@@ -9,12 +9,15 @@ export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
  
-  async create(createProductDto: CreateProductDto, userId: string) {
+  async create(createProductDto: CreateProductDto, userId: string, imageUrl?: string) {
     try {
       const product = await this.prisma.product.create({
-        data: {
+       data: {
           ...createProductDto,
-          userId: userId, 
+          price: Number(createProductDto.price),       // Sécurité : conversion en nombre
+          quantity: Number(createProductDto.quantity), // Sécurité : conversion en nombre
+          userId: userId,
+          imageUrl: imageUrl, // <-- Enregistrement du chemin de l'image
         },
       });
       return {

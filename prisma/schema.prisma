@@ -33,7 +33,7 @@ model Product {
   price       Float
   quantity    Int
   isActive    Boolean  @default(true)
-
+  imageUrl    String?
   userId      String
   createdBy   User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
