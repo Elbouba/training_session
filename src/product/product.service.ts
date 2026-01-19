@@ -2,28 +2,27 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client';
+import * as fs from 'fs';
+import { join } from 'path';
 
 @Injectable()
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
- 
+
   async create(createProductDto: CreateProductDto, userId: string, imageUrl?: string) {
     try {
       const product = await this.prisma.product.create({
-       data: {
+        data: {
           ...createProductDto,
-          price: Number(createProductDto.price),       // Sécurité : conversion en nombre
-          quantity: Number(createProductDto.quantity), // Sécurité : conversion en nombre
+          price: Number(createProductDto.price),
+          quantity: Number(createProductDto.quantity),
           userId: userId,
-          imageUrl: imageUrl, // <-- Enregistrement du chemin de l'image
+          imageUrl: imageUrl,
         },
       });
-      return {
-        message: 'Produit créé avec succès',
-        product,
-      };
+      return { message: 'Produit créé avec succès', product };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new BadRequestException('Ce produit existe déjà');
@@ -32,29 +31,23 @@ export class ProductService {
     }
   }
 
-  // --- LECTURE GLOBALE (Isolée) ---
+ 
   async findAll(userId: string, userRole: string) {
-    // Si Admin : voit tout + infos du créateur
     const filter = userRole === 'ADMIN' ? { isActive: true } : { isActive: true, userId: userId };
     
     const products = await this.prisma.product.findMany({
       where: filter,
       include: {
-        createdBy: {
-          select: { firstName: true, lastName: true, role: true }
-        }
+        createdBy: { select: { firstName: true, lastName: true, role: true } }
       }
     });
 
     return {
-      message: userRole === 'ADMIN' 
-        ? 'Liste globale des produits récupérée avec succès (Admin)' 
-        : 'Votre liste de produits récupérée avec succès',
+      message: userRole === 'ADMIN' ? 'Liste globale (Admin)' : 'Vos produits',
       products,
     };
   }
 
-  // --- LECTURE UNIQUE (Sécurisée) ---
   async findOne(id: number, userId: string, userRole: string) {
     const product = await this.prisma.product.findUnique({ 
       where: { id },
@@ -62,93 +55,67 @@ export class ProductService {
     });
 
     if (!product || !product.isActive) {
-      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé ou archivé`);
+      throw new NotFoundException(`Produit ${id} non trouvé ou archivé`);
     }
 
-    // Vérification de propriété
     if (userRole !== 'ADMIN' && product.userId !== userId) {
-      throw new ForbiddenException("Accès refusé : ce produit ne vous appartient pas");
+      throw new ForbiddenException("Accès refusé");
     }
 
-    return {
-      message: 'Produit récupéré avec succès',
-      product,
-    };
+    return { message: 'Produit récupéré avec succès', product };
   }
 
-  // --- MISE À JOUR (Sécurisée) ---
+  
   async update(id: number, updateProductDto: UpdateProductDto, userId: string, userRole: string) {
-    // On vérifie d'abord l'existence et la propriété
     await this.findOne(id, userId, userRole);
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: updateProductDto,
+    });
+    return { message: 'Produit mis à jour', product };
+  }
 
+  async remove(id: number, userId: string, userRole: string) {
+    await this.findOne(id, userId, userRole);
+    const product = await this.prisma.product.update({ 
+      where: { id },
+      data: { isActive: false } 
+    });
+    return { message: 'Produit archivé avec succès', product };
+  }
+
+  async findArchived() {
+    const products = await this.prisma.product.findMany({
+      where: { isActive: false },
+      include: { createdBy: { select: { firstName: true, lastName: true } } }
+    });
+    return { message: 'Liste des archives', products };
+  }
+
+  async restore(id: number) {
     try {
       const product = await this.prisma.product.update({
         where: { id },
-        data: updateProductDto,
+        data: { isActive: true }
       });
-      return {
-        message: 'Produit mis à jour avec succès',
-        product,
-      };
+      return { message: 'Produit restauré avec succès', product };
     } catch (error) {
-      throw error;
+      throw new NotFoundException(`Impossible de restaurer le produit ${id}`);
     }
   }
 
-  // --- ARCHIVAGE (Soft Delete sécurisé) ---
-  async remove(id: number, userId: string, userRole: string) {
-    // On vérifie d'abord l'existence et la propriété
-    await this.findOne(id, userId, userRole);
+  async hardDelete(id: number) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException(`Produit ${id} inexistant`);
 
-    try {
-      const product = await this.prisma.product.update({ 
-        where: { id },
-        data: { isActive: false } 
-      });
-      return {
-        message: 'Produit archivé (historisé) avec succès',
-        product,
-      };
-    } catch (error) {
-      throw error;
+  
+    if (product.imageUrl) {
+      const relativePath = product.imageUrl.startsWith('/') ? product.imageUrl.substring(1) : product.imageUrl;
+      const filePath = join(process.cwd(), relativePath);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
+
+    await this.prisma.product.delete({ where: { id } });
+    return { message: 'Produit et image supprimés définitivement' };
   }
-
-
-  // --- DANS PRODUCT.SERVICE.TS ---
-
-// 1. Voir uniquement les produits supprimés (ADMIN ONLY)
-async findArchived() {
-  const products = await this.prisma.product.findMany({
-    where: { isActive: false }, // On prend l'inverse
-    include: {
-      createdBy: { select: { firstName: true, lastName: true } }
-    }
-  });
-
-  return {
-    message: 'Liste des produits archivés récupérée avec succès',
-    products,
-  };
-}
-
-// 2. Restaurer un produit (ADMIN ONLY)
-async restore(id: number) {
-  try {
-    const product = await this.prisma.product.update({
-      where: { id },
-      data: { isActive: true } // On repasse à true
-    });
-
-    return {
-      message: 'Produit restauré avec succès',
-      product,
-    };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      throw new NotFoundException(`Produit avec l'ID ${id} non trouvé`);
-    }
-    throw error;
-  }
-}
 }

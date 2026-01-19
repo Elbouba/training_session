@@ -16,18 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  @UseGuards(RolesGuard)
-  @Get('archived')
-  findArchived() {
-    return this.productService.findArchived();
-  }
-
-  @UseGuards(RolesGuard)
-  @Patch('restore/:id')
-  restore(@Param('id') id: string) {
-    return this.productService.restore(+id);
-  }
-
+  
   @Get()
   findAll(@Req() req: any) {
     return this.productService.findAll(req.user.userId, req.user.role);
@@ -38,23 +27,17 @@ export class ProductController {
     return this.productService.findOne(+id, req.user.userId, req.user.role);
   }
 
-  // --- NOUVEAU : Création avec Upload d'image ---
   @Post()
   @UseInterceptors(FileInterceptor('image', {
     storage: diskStorage({
       destination: './uploads',
       filename: (req, file, callback) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = extname(file.originalname);
-        callback(null, `${uniqueSuffix}${ext}`);
+        callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
       },
     }),
   }))
-  create(
-    @Body() dto: CreateProductDto, 
-    @Req() req: any, 
-    @UploadedFile() file: Express.Multer.File
-  ) {
+  create(@Body() dto: CreateProductDto, @Req() req: any, @UploadedFile() file: Express.Multer.File) {
     const imageUrl = file ? `/uploads/${file.filename}` : undefined;
     return this.productService.create(dto, req.user.userId, imageUrl);
   }
@@ -67,5 +50,24 @@ export class ProductController {
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: any) {
     return this.productService.remove(+id, req.user.userId, req.user.role);
+  }
+
+  // --- ROUTES RÉSERVÉES ADMIN ---
+  @UseGuards(RolesGuard)
+  @Get('admin/archived')
+  findArchived() {
+    return this.productService.findArchived();
+  }
+
+  @UseGuards(RolesGuard)
+  @Patch('admin/restore/:id')
+  restore(@Param('id') id: string) {
+    return this.productService.restore(+id);
+  }
+
+  @UseGuards(RolesGuard)
+  @Delete('admin/hard-delete/:id')
+  hardDelete(@Param('id') id: string) {
+    return this.productService.hardDelete(+id);
   }
 }
